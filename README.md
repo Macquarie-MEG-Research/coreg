@@ -34,7 +34,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ```
 
-!([Imgur](https://i.imgur.com/UDnlAqA.png))
+![Imgur](https://i.imgur.com/UDnlAqA.png)
 
 ## Papers:
 
