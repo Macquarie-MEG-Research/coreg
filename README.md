@@ -34,6 +34,8 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ```
 
+!([Imgur](https://i.imgur.com/UDnlAqA.png))
+
 ## Papers:
 
 - [Gohel, B., Lim, S., Kim, M. Y., Kwon, H., & Kim, K. (2017). Approximate Subject Specific Pseudo MRI from an Available MRI Dataset for MEG Source Imaging. Frontiers in neuroinformatics, 11, 50.](https://www.frontiersin.org/articles/10.3389/fninf.2017.00050/full)
