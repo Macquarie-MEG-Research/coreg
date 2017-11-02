@@ -16,6 +16,13 @@
 % - hsp_points      = number of points for downsampling the headshape (try 100-200)
 % - scalpthreshold  = threshold for scalp extraction (try 0.05 if unsure)
 %
+% VARIABLE INPUTS (if using please specify all):
+% - do_vids         = save videos to file. Requires CaptureFigVid.
+%
+% EXAMPLE FUNCTION CALL:
+% coreg_yokogawa_icp(dir_name,confile,mrkfile,mri_file,hspfile,elpfile,...
+% hsp_points, scalpthreshold,'yes')
+%
 % OUTPUTS:
 % - grad_trans              = correctly aligned sensor layout 
 % - headshape_downsampled   = downsampled headshape (original variable name I know) 
@@ -28,7 +35,13 @@
 %
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function coreg_yokogawa_icp(dir_name,confile,mrkfile,mri_file,hspfile,elpfile,hsp_points,scalpthreshold)
+function coreg_yokogawa_icp(dir_name,confile,mrkfile,mri_file,hspfile,elpfile,hsp_points,scalpthreshold,varargin)
+
+if isempty(varargin)
+    do_vids = 'no';
+else
+    do_vids = varargin{1};
+end
 
 cd(dir_name); disp('CDd to the right place');
 
@@ -45,12 +58,17 @@ markers                     = mrk.fid.pos([2 3 1 4 5],:);%reorder mrk to match o
 meg2head_transm             = [[R;T]'; 0 0 0 1];%reorganise and make 4*4 transformation matrix
 
 % Transform sensors based on the MRKfile
-grad_trans                  = ft_transform_geometry_PFS_hacked(meg2head_transm,grad_con); %Use my hacked version of the ft function - accuracy checking removed not sure if this is good or not
-grad_trans.fid              = shape; %add in the head information
+grad_trans      = ft_transform_geometry_PFS_hacked(meg2head_transm,grad_con); %Use my hacked version of the ft function - accuracy checking removed not sure if this is good or not
+grad_trans.fid  = shape; %add in the head information
+% Rotate about z-axis
+rot180mat       = rotate_about_z(180);
+grad_trans      = ft_transform_geometry(rot180mat,grad_trans);
 save grad_trans grad_trans
 
 % Get headshape downsampled to 100 points with facial info preserved
 headshape_downsampled = downsample_headshape(hspfile,hsp_points,grad_trans);
+% Rotate about z-axis
+headshape_downsampled = ft_transform_geometry(rot180mat,headshape_downsampled);
 save headshape_downsampled headshape_downsampled
 
 % Load in MRI
@@ -63,6 +81,7 @@ cfg.method                  = 'interactive';
 cfg.viewmode                = 'ortho';
 cfg.coordsys                = 'neuromag';
 [mri_realigned]             = ft_volumerealign(cfg, mri_orig);
+
 save mri_realigned mri_realigned
 
 % check that the MRI is consistent after realignment
@@ -85,19 +104,35 @@ cfg.numvertices = 90000;
 mesh = ft_prepare_mesh(cfg,scalp);
 mesh = ft_convert_units(mesh,'cm');
 % Flip the mesh around (improves coreg)
-mesh.pos(:,2) = mesh.pos(:,2).*-1;
+%mesh.pos(:,2) = mesh.pos(:,2).*-1;
 
 %% Create Figure for Quality Checking
-figure;
-ft_plot_mesh(mesh,'facecolor',[238,206,179]./255,'EdgeColor','none','facealpha',0.8); hold on;
-camlight; hold on; drawnow;
-view(90,0);
-title('If this looks weird you might want to adjust the cfg.scalpthreshold value');
-print('mesh_quality','-dpdf');
-
-%% Create a figure to check the scalp mesh and headshape points
-figure;ft_plot_mesh(mesh,'facecolor',[238,206,179]./255,'EdgeColor','none','facealpha',0.8); hold on;
-ft_plot_headshape(headshape_downsampled); drawnow;
+if strcmp(do_vids,'yes')
+    try
+        figure;
+        ft_plot_mesh(mesh,'facecolor',[238,206,179]./255,'EdgeColor','none','facealpha',0.8); hold on;
+        camlight; hold on; drawnow;
+        view(0,0);
+        ft_plot_headshape(headshape_downsampled); drawnow;
+        OptionZ.FrameRate=15;OptionZ.Duration=5.5;OptionZ.Periodic=true;
+        CaptureFigVid([0,0; 360,0], 'mesh_quality',OptionZ)
+    catch
+        disp('You need CaptureFigVid in your MATLAB path. Download at https://goo.gl/Qr7GXb');
+        figure;
+        ft_plot_mesh(mesh,'facecolor',[238,206,179]./255,'EdgeColor','none','facealpha',0.8); hold on;
+        camlight; hold on; drawnow;
+        ft_plot_headshape(headshape_downsampled); drawnow;
+        view(0,0);print('mesh_quality','-dpdf');
+    end
+else
+    figure;
+    ft_plot_mesh(mesh,'facecolor',[238,206,179]./255,'EdgeColor','none','facealpha',0.8); hold on;
+    camlight; hold on; drawnow;
+    view(90,0);
+    ft_plot_headshape(headshape_downsampled); drawnow;
+    title('If this looks weird you might want to adjust the cfg.scalpthreshold value');
+    print('mesh_quality','-dpdf');
+end
 
 %% Perform ICP using mesh and headshape information
 numiter = 50;
@@ -105,7 +140,11 @@ disp('Performing ICP fit with 50 iterations');
 [R, t, err, dummy, info] = icp(mesh.pos', headshape_downsampled.pos', numiter, 'Minimize', 'plane', 'Extrapolation', true, 'WorstRejection', 0.05);
 
 %% Create figure to display how the ICP algorithm reduces error 
-%figure;plot(1:1:49,err);
+clear plot;
+figure; plot([1:1:51]',err,'LineWidth',8);
+ylabel('Error'); xlabel('Iteration');
+title('Error*Iteration');
+set(gca,'FontSize',25);
 
 %% Create transformation matrix
 trans_matrix = inv([real(R) real(t);0 0 0 1]);
@@ -114,12 +153,31 @@ save trans_matrix trans_matrix
 %% Create figure to assess accuracy of coregistration
 mesh_spare = mesh;
 mesh_spare.pos = ft_warp_apply(trans_matrix, mesh_spare.pos);
+c = datestr(clock); %time and date
 
-figure;
-ft_plot_mesh(mesh_spare,'facecolor',[238,206,179]./255,'EdgeColor','none','facealpha',0.8); hold on;
-camlight; hold on;
-ft_plot_headshape(headshape_downsampled); title(sprintf('Error of ICP fit = %d' , err));
-print('mesh_quality','-dpdf');
+if strcmp(do_vids,'yes')
+    try
+        figure;
+        ft_plot_mesh(mesh_spare,'facecolor',[238,206,179]./255,'EdgeColor','none','facealpha',0.8); hold on;
+        camlight; hold on;
+        ft_plot_headshape(headshape_downsampled); title(sprintf('%s.   Error of ICP fit = %d' , c, err(end)));
+        clear c; OptionZ.FrameRate=15;OptionZ.Duration=5.5;OptionZ.Periodic=true;
+        CaptureFigVid([0,0; 360,0], 'ICP_quality',OptionZ)
+    catch
+        figure;
+        ft_plot_mesh(mesh_spare,'facecolor',[238,206,179]./255,'EdgeColor','none','facealpha',0.8); hold on;
+        camlight; hold on;
+        ft_plot_headshape(headshape_downsampled); title(sprintf('%s.   Error of ICP fit = %d' , c, err(end)));
+        clear c; print('ICP_quality','-dpdf');
+        disp('You need CaptureFigVid in your MATLAB path. Download at https://goo.gl/Qr7GXb');
+    end
+else
+    figure;
+    ft_plot_mesh(mesh_spare,'facecolor',[238,206,179]./255,'EdgeColor','none','facealpha',0.8); hold on;
+    camlight; hold on;
+    ft_plot_headshape(headshape_downsampled); title(sprintf('%s.   Error of ICP fit = %d' , c, err(end)));
+    clear c; print('ICP_quality','-dpdf');
+end
 
 %% Segment
 cfg           = [];
@@ -132,7 +190,7 @@ cfg.method='singleshell';
 headmodel_singleshell = ft_prepare_headmodel(cfg, mri_segmented); % in cm, creat headmodel
 
 % Flip headmodel around
-headmodel_singleshell.bnd.pos(:,2) = headmodel_singleshell.bnd.pos(:,2).*-1;
+%headmodel_singleshell.bnd.pos(:,2) = headmodel_singleshell.bnd.pos(:,2).*-1;
 % Apply transformation matrix
 headmodel_singleshell.bnd.pos = ft_warp_apply(trans_matrix,headmodel_singleshell.bnd.pos);
 
@@ -412,6 +470,26 @@ function [new] = apply(transform, old)
 old(:,4) = 1;
 new = old * transform';
 new = new(:,1:3);
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% rotate_about_z - make a rotation matix for arbitrary rotation in degrees
+% around z axis
+%
+% Written by Paul Sowman Oct 2017 (http://web.iitd.ac.in/~hegde/cad/lecture/L6_3dtrans.pdf - page 4)
+%
+% INPUTS:
+% - deg        = degrees of rotation required
+%
+% OUTPUTS:
+% - rmatx      = a 4*4 rotation matrix for deg degrees about z
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+function rmatx=rotate_about_z(deg)
+   
+    deg   = deg2rad(deg);
+    rmatx = [cos(deg) sin(deg) 0 0;-sin(deg) cos(deg) 0 0;0 0 1 0;0 0 0 1];
 end
 
     function [headshape_downsampled] = downsample_headshape(path_to_headshape,numvertices,sensors)
