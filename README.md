@@ -8,7 +8,7 @@
 % coreg_yokogawa_icp is a function to coregister a structural MRI with MEG data 
 % and associated headshape information
 %
-% Written by Robert Seymour Oct 2017 (some subfunctions written by Paul
+% Written by Robert Seymour Oct/Nov 2017 (some subfunctions written by Paul
 % Sowman)
 %
 % INPUTS:
@@ -20,6 +20,13 @@
 % - elpfile         = full path to the elp file
 % - hsp_points      = number of points for downsampling the headshape (try 100-200)
 % - scalpthreshold  = threshold for scalp extraction (try 0.05 if unsure)
+%
+% VARIABLE INPUTS (if using please specify all):
+% - do_vids         = save videos to file. Requires CaptureFigVid.
+%
+% EXAMPLE FUNCTION CALL:
+% coreg_yokogawa_icp(dir_name,confile,mrkfile,mri_file,hspfile,elpfile,...
+% hsp_points, scalpthreshold,'yes')
 %
 % OUTPUTS:
 % - grad_trans              = correctly aligned sensor layout 
