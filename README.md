@@ -2,6 +2,10 @@
 
 ## coreg_yokogawa_icp is a work in progress scripts to improve the coregistation between structural MRI and MEG data with polhemus headshape data. This approach uses the iterative closest point (ICP) algorithm to match scalp surface with downsampled headshape information.
 
+### The function currently works well for data acquired with FACIAL INFORMATION (eyes and nose). If you don't have this the function probably won't improve manual coreg (marking the 3 fiducials by hand) and may even reduce accuracy. More comprehensive testing is needed to make the code stable for release.
+
+### Please download CaptureFigVid for "cool" animations
+
 ```matlab
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
