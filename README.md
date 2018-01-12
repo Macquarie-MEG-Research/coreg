@@ -1,8 +1,14 @@
 # MATLAB/Fieldtrip Yokogawa Coregistration Scripts
 
-## coreg_yokogawa_icp is a work in progress scripts to improve the coregistation between structural MRI and MEG data with polhemus headshape data. This approach uses the iterative closest point (ICP) algorithm to match scalp surface with downsampled headshape information.
+## 1. realign_MEG_sensors folder
 
-### The function currently works well for data acquired with FACIAL INFORMATION (eyes and nose). If you don't have this the function probably won't improve manual coreg (marking the 3 fiducials by hand) and may even reduce accuracy. More comprehensive testing is needed to make the code stable for release.
+This folder outlines how to realign the MEG sensors based on the position of the 5 marker coils (instead of doing this using the MEG160 Yokogawa software).
+
+## 2. coreg_yokogawa_icp
+
+This is a work in progress script to improve the coregistation between structural MRI and MEG data with polhemus headshape data. This approach uses the iterative closest point (ICP) algorithm to match scalp surface with downsampled headshape information.
+
+The function currently works well for data acquired with FACIAL INFORMATION (eyes and nose). If you don't have this the function probably won't improve manual coreg (marking the 3 fiducials by hand) and may even reduce accuracy. More comprehensive testing is needed to make the code stable for release.
 
 ### Please download CaptureFigVid for "cool" animations
 
