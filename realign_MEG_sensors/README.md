@@ -1,3 +1,5 @@
+### If you have all 5 markers working use this code:
+
 ```matlab
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -43,3 +45,36 @@ hold on; ft_plot_sens(grad_trans); view([90, 0]);
 
 saveas(gcf,'shape.png','png');
 ```
+
+### If you have one bad marker coil use this variation:
+
+```matlab
+% shape = output of parsePolhemus.m
+% data_raw = MEG data from ft_preprocessing
+% mrkfile = mrkfile (duh)  
+
+bad_coil = '' % name of the coil as desribed in parsePolhemus.m (LPAred/RPAyel/PFblue/LPFwh/RPFblack)
+
+fprintf(''); disp('TAKING OUT BAD MARKER');
+
+% Identify the bad coil
+badcoilpos = find(ismember(shape.fid.label,bad_coil));
+
+% Take away the bad marker
+marker_order = [2 3 1 4 5];
+
+grad_con                    = data_raw.grad; %in cm, load grads
+mrk                         = ft_read_headshape(mrkfile,'format','yokogawa_mrk');
+markers                     = mrk.fid.pos(marker_order,:);%reorder mrk to match order in shape
+
+% Now take out the bad marker when you realign
+markers(badcoilpos-3,:) = [];
+fids_2_use = shape.fid.pnt(4:end,:); fids_2_use(badcoilpos-3,:) = [];
+[R,T,Yf,Err]                = rot3dfit(markers,fids_2_use);%calc rotation transform
+meg2head_transm             = [[R;T]'; 0 0 0 1];%reorganise and make 4*4 transformation matrix
+
+grad_trans                  = ft_transform_geometry_PFS_hacked(meg2head_transm,grad_con);
+grad_trans.fid              = shape; %add in the head information
+save grad_trans grad_trans
+```
+
