@@ -181,14 +181,14 @@ if strcmp(do_vids,'yes')
         ft_plot_mesh(mesh_spare,'facecolor',[238,206,179]./255,'EdgeColor','none','facealpha',0.8); hold on;
         camlight; hold on;
         ft_plot_headshape(headshape_downsampled); title(sprintf('%s.   Error of ICP fit = %d' , c, err(end)));
-        clear c; OptionZ.FrameRate=15;OptionZ.Duration=5.5;OptionZ.Periodic=true;
+        OptionZ.FrameRate=15;OptionZ.Duration=5.5;OptionZ.Periodic=true;
         CaptureFigVid([0,0; 360,0], 'ICP_quality',OptionZ)
     catch
         figure;
         ft_plot_mesh(mesh_spare,'facecolor',[238,206,179]./255,'EdgeColor','none','facealpha',0.8); hold on;
         camlight; hold on;
         ft_plot_headshape(headshape_downsampled); title(sprintf('%s.   Error of ICP fit = %d' , c, err(end)));
-        clear c; print('ICP_quality','-dpdf');
+        print('ICP_quality','-dpdf');
         disp('You need CaptureFigVid in your MATLAB path. Download at https://goo.gl/Qr7GXb');
     end
 else
@@ -207,7 +207,8 @@ mri_segmented  = ft_volumesegment(cfg, mri_realigned);
 %% Create singleshell headmodel
 cfg = [];
 cfg.method='singleshell';
-headmodel_singleshell = ft_prepare_headmodel(cfg, mri_segmented); % in cm, creat headmodel
+
+headmodel_singleshell = ft_prepare_headmodel(cfg, mri_segmented); % in cm, create headmodel
 
 % Flip headmodel around
 %headmodel_singleshell.bnd.pos(:,2) = headmodel_singleshell.bnd.pos(:,2).*-1;
