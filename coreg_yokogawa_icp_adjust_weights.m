@@ -19,6 +19,7 @@
 % VARIABLE INPUTS (if using please specify all):
 % - do_vids         = save videos to file. Requires CaptureFigVid.
 % - weight_number   = how strongly do you want to weight the facial points?
+% - bad_coil        = is there a bad coil to take out?
 %
 % EXAMPLE FUNCTION CALL:
 % coreg_yokogawa_icp(dir_name,confile,mrkfile,mri_file,hspfile,elpfile,...
@@ -41,9 +42,11 @@ function coreg_yokogawa_icp_adjust_weights(dir_name,confile,mrkfile,mri_file,hsp
 if isempty(varargin)
     do_vids = 'no';
     weight_number = 0.1;
+    bad_coil = '';
 else
     do_vids = varargin{1};
     weight_number = 1./varargin{2};
+    bad_coil = varargin{3}
 end
 
 cd(dir_name); disp('CDd to the right place');
@@ -55,18 +58,44 @@ cd(dir_name); disp('CDd to the right place');
 grad_con                    = ft_read_sens(confile); %in cm, load grads
 
 % Read the mrk file
-mrk                         = ft_read_headshape(mrkfile,'format','yokogawa_mrk');
-markers                     = mrk.fid.pos([2 3 1 4 5],:);%reorder mrk to match order in shape
-[R,T,Yf,Err]                = rot3dfit(markers,shape.fid.pnt(4:end,:));%calc rotation transform
-meg2head_transm             = [[R;T]'; 0 0 0 1];%reorganise and make 4*4 transformation matrix
-
-% Transform sensors based on the MRKfile
-grad_trans      = ft_transform_geometry_PFS_hacked(meg2head_transm,grad_con); %Use my hacked version of the ft function - accuracy checking removed not sure if this is good or not
-grad_trans.fid  = shape; %add in the head information
-% Rotate about z-axis
-rot180mat       = rotate_about_z(180);
-grad_trans      = ft_transform_geometry(rot180mat,grad_trans);
-save grad_trans grad_trans
+if isempty(bad_coil)
+    mrk                         = ft_read_headshape(mrkfile,'format','yokogawa_mrk');
+    markers                     = mrk.fid.pos([2 3 1 4 5],:);%reorder mrk to match order in shape
+    [R,T,Yf,Err]                = rot3dfit(markers,shape.fid.pnt(4:end,:));%calc rotation transform
+    meg2head_transm             = [[R;T]'; 0 0 0 1];%reorganise and make 4*4 transformation matrix
+    
+    grad_trans                  = ft_transform_geometry_PFS_hacked(meg2head_transm,grad_con); %Use my hacked version of the ft function - accuracy checking removed not sure if this is good or not
+    grad_trans.fid              = shape; %add in the head information
+    % Rotate about z-axis
+    rot180mat       = rotate_about_z(180);
+    grad_trans      = ft_transform_geometry(rot180mat,grad_trans);
+    save grad_trans grad_trans
+    
+    % Else if there is a bad marker
+else
+    fprintf(''); disp('TAKING OUT BAD MARKER');
+    
+    % Identify the bad coil
+    badcoilpos = find(ismember(shape.fid.label,bad_coil));
+    
+    % Take away the bad marker
+    marker_order = [2 3 1 4 5];
+    
+    mrk                         = ft_read_headshape(mrkfile,'format','yokogawa_mrk');
+    markers                     = mrk.fid.pos(marker_order,:);%reorder mrk to match order in shape
+    % Now take out the bad marker when you realign
+    markers(badcoilpos-3,:) = [];
+    fids_2_use = shape.fid.pnt(4:end,:); fids_2_use(badcoilpos-3,:) = [];
+    [R,T,Yf,Err]                = rot3dfit(markers,fids_2_use);%calc rotation transform
+    meg2head_transm             = [[R;T]'; 0 0 0 1];%reorganise and make 4*4 transformation matrix
+    
+    grad_trans                  = ft_transform_geometry_PFS_hacked(meg2head_transm,grad_con); %Use my hacked version of the ft function - accuracy checking removed not sure if this is good or not
+    grad_trans.fid              = shape; %add in the head information
+    % Rotate about z-axis
+    rot180mat       = rotate_about_z(180);
+    grad_trans      = ft_transform_geometry(rot180mat,grad_trans);
+    save grad_trans grad_trans
+end
 
 % Get headshape downsampled to 100 points with facial info preserved
 headshape_downsampled = downsample_headshape(hspfile,hsp_points,grad_trans);
@@ -198,6 +227,9 @@ else
     ft_plot_headshape(headshape_downsampled); title(sprintf('%s.   Error of ICP fit = %d' , c, err(end)));
     clear c; print('ICP_quality','-dpdf');
 end
+
+%% Apply transform to the MRI
+%mri_realigned = ft_transform_geometry_PFS_hacked(trans_matrix, mri_realigned);
 
 %% Segment
 cfg           = [];
