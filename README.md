@@ -10,6 +10,10 @@ This is a work in progress script to improve the coregistation between structura
 
 The function currently works well for data acquired with FACIAL INFORMATION (eyes and nose). If you don't have this the function probably won't improve manual coreg (marking the 3 fiducials by hand) and may even reduce accuracy. More comprehensive testing is needed to make the code stable for release.
 
+## coreg_yokogawa_icp_adjust_weights.m 
+
+This is currently the most up to date script. The function allows you to weight facial points higher when performing the ICP fit. It seems to work well with a weighting factor of 0.5-0.8. This function also has the option of taking out a bad coil (see function comments).
+
 ### Please download CaptureFigVid for "cool" animations
 
 ```matlab
