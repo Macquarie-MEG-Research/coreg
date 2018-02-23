@@ -3,7 +3,7 @@
 % coreg_yokogawa_icp is a function to coregister a structural MRI with MEG data 
 % and associated headshape information
 %
-% Written by Robert Seymour Oct 2017 (some subfunctions written by Paul
+% Written by Robert Seymour Oct/Nov 2017 (some subfunctions written by Paul
 % Sowman)
 %
 % INPUTS:
