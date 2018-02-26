@@ -19,11 +19,11 @@ This is currently the most up to date script. The function allows you to weight 
 ```matlab
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-% coreg_yokogawa_icp is a function to coregister a structural MRI with MEG data 
-% and associated headshape information
+% coreg_yokogawa_icp_adjust_weights is a function to coregister a structural 
+% MRI with MEG data and associated headshape information
 %
-% Written by Robert Seymour Oct/Nov 2017 (some subfunctions written by Paul
-% Sowman)
+% Written by Robert Seymour Oct 2017 - Feb 2018 (some subfunctions 
+% contributed by Paul Sowman)
 %
 % INPUTS:
 % - dir_name        = directory name for the output of your coreg
@@ -37,18 +37,21 @@ This is currently the most up to date script. The function allows you to weight 
 %
 % VARIABLE INPUTS (if using please specify all):
 % - do_vids         = save videos to file. Requires CaptureFigVid.
+% - weight_number   = how strongly do you want to weight the facial points?
+% - bad_coil        = is there a bad coil to take out?
 %
 % EXAMPLE FUNCTION CALL:
-% coreg_yokogawa_icp(dir_name,confile,mrkfile,mri_file,hspfile,elpfile,...
-% hsp_points, scalpthreshold,'yes')
+% coreg_yokogawa_icp_adjust_weights(dir_name,confile,mrkfile,mri_file,...
+% hspfile,elpfile,hsp_points, scalpthreshold,'yes',0.8,'')
 %
 % OUTPUTS:
-% - grad_trans              = correctly aligned sensor layout 
-% - headshape_downsampled   = downsampled headshape (original variable name I know) 
+% - grad_trans              = correctly aligned sensor layout
+% - headshape_downsampled   = downsampled headshape (original variable name I know)
 % - mri_realigned           = the mri realigned based on fiducial points
 % - trans_matrix            = transformation matrix for accurate coregistration
+% - mri_realigned2          = the coregistered mri based on ICP algorithm
 % - headmodel_singleshell   = coregistered singleshell headmodel
-% 
+%
 % THIS IS A WORK IN PROGRESS FUNCTION - any updates or suggestions would be
 % much appreciated
 %
