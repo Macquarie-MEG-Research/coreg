@@ -30,6 +30,7 @@
 % - headshape_downsampled   = downsampled headshape (original variable name I know)
 % - mri_realigned           = the mri realigned based on fiducial points
 % - trans_matrix            = transformation matrix for accurate coregistration
+% - mri_realigned2          = the coregistered mri based on ICP algorithm
 % - headmodel_singleshell   = coregistered singleshell headmodel
 %
 % THIS IS A WORK IN PROGRESS FUNCTION - any updates or suggestions would be
@@ -132,7 +133,7 @@ scalp  = ft_volumesegment(cfg, mri_realigned);
 %% Create mesh out of scalp surface
 cfg = [];
 cfg.method = 'projectmesh';
-cfg.numvertices = 90000;
+cfg.numvertices = 75000;
 mesh = ft_prepare_mesh(cfg,scalp);
 mesh = ft_convert_units(mesh,'cm');
 % Flip the mesh around (improves coreg)
@@ -229,12 +230,20 @@ else
 end
 
 %% Apply transform to the MRI
-%mri_realigned = ft_transform_geometry_PFS_hacked(trans_matrix, mri_realigned);
+mri_realigned2 = ft_transform_geometry(trans_matrix,mri_realigned);
+
+save mri_realigned2 mri_realigned2
+
+% check that the MRI is consistent after realignment
+ft_determine_coordsys(mri_realigned2, 'interactive', 'no');
+hold on; % add the subsequent objects to the figure
+drawnow; % workaround to prevent some MATLAB versions (2012b and 2014b) from crashing
+ft_plot_headshape(headshape_downsampled);
 
 %% Segment
 cfg           = [];
 cfg.output    = 'brain';
-mri_segmented  = ft_volumesegment(cfg, mri_realigned);
+mri_segmented  = ft_volumesegment(cfg, mri_realigned2);
 
 %% Create singleshell headmodel
 cfg = [];
@@ -245,11 +254,12 @@ headmodel_singleshell = ft_prepare_headmodel(cfg, mri_segmented); % in cm, creat
 % Flip headmodel around
 %headmodel_singleshell.bnd.pos(:,2) = headmodel_singleshell.bnd.pos(:,2).*-1;
 % Apply transformation matrix
-headmodel_singleshell.bnd.pos = ft_warp_apply(trans_matrix,headmodel_singleshell.bnd.pos);
+%headmodel_singleshell.bnd.pos = ft_warp_apply(trans_matrix,headmodel_singleshell.bnd.pos);
 
 figure;ft_plot_headshape(headshape_downsampled) %plot headshape
 ft_plot_sens(grad_trans, 'style', 'k*')
-ft_plot_vol(headmodel_singleshell,  'facecolor', 'cortex', 'edgecolor', 'none');alpha 1; camlight
+ft_plot_vol(headmodel_singleshell,  'facecolor', 'cortex', 'edgecolor', 'cortex'); alpha(1.0); hold on;
+ft_plot_mesh(mesh_spare,'facecolor','skin'); alpha(0.2); camlight;
 view([90,0]); title('After Coreg');
 print('headmodel_quality','-dpdf');
 save headmodel_singleshell headmodel_singleshell
