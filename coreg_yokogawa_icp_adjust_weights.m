@@ -1,10 +1,10 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %
-% coreg_yokogawa_icp is a function to coregister a structural MRI with MEG data
-% and associated headshape information
+% coreg_yokogawa_icp_adjust_weights is a function to coregister a structural
+% MRI with MEG data and associated headshape information
 %
-% Written by Robert Seymour Oct/Nov 2017 (some subfunctions written by Paul
-% Sowman)
+% Written by Robert Seymour Oct 2017 - July 2018 (some subfunctions
+% contributed by Paul Sowman)
 %
 % INPUTS:
 % - dir_name        = directory name for the output of your coreg
@@ -22,8 +22,8 @@
 % - bad_coil        = is there a bad coil to take out?
 %
 % EXAMPLE FUNCTION CALL:
-% coreg_yokogawa_icp(dir_name,confile,mrkfile,mri_file,hspfile,elpfile,...
-% hsp_points, scalpthreshold,'yes')
+% coreg_yokogawa_icp_adjust_weights(dir_name,confile,mrkfile,mri_file,...
+% hspfile,elpfile,hsp_points, scalpthreshold,'yes',0.8,'')
 %
 % OUTPUTS:
 % - grad_trans              = correctly aligned sensor layout
@@ -52,27 +52,65 @@ end
 
 cd(dir_name); disp('CDd to the right place');
 
-% Get Polhemus Points
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Load initial variables & check the input of the function
+ % Get Polhemus Points
+disp('Reading elp and headshape data');
 [shape] = parsePolhemus(elpfile,hspfile);
+shape   = ft_convert_units(shape,'cm');
 
-% Read the grads from the con file
-grad_con                    = ft_read_sens(confile); %in cm, load grads
+ % Read the grads from the con file
+disp('Reading sensor data from con file');
+grad_con = ft_read_sens(confile); %load grads
+grad_con = ft_convert_units(grad_con,'cm'); %in cm
 
-% Read the mrk file
+ % Read mrk_file
+disp('Reading the mrk file');
+mrk      = ft_read_headshape(mrkfile,'format','yokogawa_mrk');
+mrk      = ft_convert_units(mrk,'cm'); %in cm
+
+% Get headshape downsampled to specified no. of points 
+% with facial info preserved
+fprintf('Downsampling headshape information to %d points whilst preserving facial information\n'...
+    ,hsp_points); 
+headshape_downsampled = downsample_headshape(hspfile,hsp_points);
+
+ % Load in MRI
+disp('Reading the MRI file'); 
+mri_orig = ft_read_mri(mri_file); % in mm, read in mri from DICOM
+mri_orig = ft_convert_units(mri_orig,'cm'); 
+mri_orig.coordsys = 'neuromag';
+
+% MRI...
+% Give rough estimate of fiducial points
+cfg                         = [];
+cfg.method                  = 'interactive';
+cfg.viewmode                = 'ortho';
+cfg.coordsys                = 'bti';
+[mri_realigned]             = ft_volumerealign(cfg, mri_orig);
+
+disp('Saving the first realigned MRI'); 
+%save mri_realigned mri_realigned
+
+% check that the MRI is consistent after realignment
+ft_determine_coordsys(mri_realigned, 'interactive', 'no');
+hold on; % add the subsequent objects to the figure
+drawnow; % workaround to prevent some MATLAB versions (2012b and 2014b) from crashing
+ft_plot_headshape(headshape_downsampled);
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+% If there is no bad marker perform coreg normally
 if isempty(bad_coil)
-    mrk                         = ft_read_headshape(mrkfile,'format','yokogawa_mrk');
     markers                     = mrk.fid.pos([2 3 1 4 5],:);%reorder mrk to match order in shape
     [R,T,Yf,Err]                = rot3dfit(markers,shape.fid.pnt(4:end,:));%calc rotation transform
     meg2head_transm             = [[R;T]'; 0 0 0 1];%reorganise and make 4*4 transformation matrix
     
     grad_trans                  = ft_transform_geometry_PFS_hacked(meg2head_transm,grad_con); %Use my hacked version of the ft function - accuracy checking removed not sure if this is good or not
     grad_trans.fid              = shape; %add in the head information
-    % Rotate about z-axis
-    rot180mat       = rotate_about_z(180);
-    grad_trans      = ft_transform_geometry(rot180mat,grad_trans);
     save grad_trans grad_trans
     
-    % Else if there is a bad marker
+% Else if there is a bad marker take out this info and perform coreg
 else
     fprintf(''); disp('TAKING OUT BAD MARKER');
     
@@ -81,8 +119,6 @@ else
     
     % Take away the bad marker
     marker_order = [2 3 1 4 5];
-    
-    mrk                         = ft_read_headshape(mrkfile,'format','yokogawa_mrk');
     markers                     = mrk.fid.pos(marker_order,:);%reorder mrk to match order in shape
     % Now take out the bad marker when you realign
     markers(badcoilpos-3,:) = [];
@@ -92,36 +128,8 @@ else
     
     grad_trans                  = ft_transform_geometry_PFS_hacked(meg2head_transm,grad_con); %Use my hacked version of the ft function - accuracy checking removed not sure if this is good or not
     grad_trans.fid              = shape; %add in the head information
-    % Rotate about z-axis
-    rot180mat       = rotate_about_z(180);
-    grad_trans      = ft_transform_geometry(rot180mat,grad_trans);
     save grad_trans grad_trans
 end
-
-% Get headshape downsampled to 100 points with facial info preserved
-headshape_downsampled = downsample_headshape(hspfile,hsp_points,grad_trans);
-% Rotate about z-axis
-headshape_downsampled = ft_transform_geometry(rot180mat,headshape_downsampled);
-save headshape_downsampled headshape_downsampled
-
-% Load in MRI
-mri_orig                    = ft_read_mri(mri_file); % in mm, read in mri from DICOM
-mri_orig = ft_convert_units(mri_orig,'cm'); mri_orig.coordsys = 'neuromag';
-
-% Give rough estimate of fiducial points
-cfg                         = [];
-cfg.method                  = 'interactive';
-cfg.viewmode                = 'ortho';
-cfg.coordsys                = 'neuromag';
-[mri_realigned]             = ft_volumerealign(cfg, mri_orig);
-
-save mri_realigned mri_realigned
-
-% check that the MRI is consistent after realignment
-ft_determine_coordsys(mri_realigned, 'interactive', 'no');
-hold on; % add the subsequent objects to the figure
-drawnow; % workaround to prevent some MATLAB versions (2012b and 2014b) from crashing
-ft_plot_headshape(headshape_downsampled);
 
 %% Extract Scalp Surface
 cfg = [];
@@ -132,20 +140,18 @@ scalp  = ft_volumesegment(cfg, mri_realigned);
 
 %% Create mesh out of scalp surface
 cfg = [];
-cfg.method = 'projectmesh';
-cfg.numvertices = 75000;
+cfg.method = 'isosurface';
+cfg.numvertices = 10000;
 mesh = ft_prepare_mesh(cfg,scalp);
 mesh = ft_convert_units(mesh,'cm');
-% Flip the mesh around (improves coreg)
-%mesh.pos(:,2) = mesh.pos(:,2).*-1;
 
 %% Create Figure for Quality Checking
 if strcmp(do_vids,'yes')
     try
         figure;
         ft_plot_mesh(mesh,'facecolor',[238,206,179]./255,'EdgeColor','none','facealpha',0.8); hold on;
-        camlight; hold on; drawnow;
-        view(0,0);
+        camlight; lighting phong; camlight left; camlight right; material dull
+        hold on; drawnow; view(0,0);
         ft_plot_headshape(headshape_downsampled); drawnow;
         OptionZ.FrameRate=15;OptionZ.Duration=5.5;OptionZ.Periodic=true;
         CaptureFigVid([0,0; 360,0], 'mesh_quality',OptionZ)
@@ -153,23 +159,25 @@ if strcmp(do_vids,'yes')
         disp('You need CaptureFigVid in your MATLAB path. Download at https://goo.gl/Qr7GXb');
         figure;
         ft_plot_mesh(mesh,'facecolor',[238,206,179]./255,'EdgeColor','none','facealpha',0.8); hold on;
-        camlight; hold on; drawnow;
+        camlight; lighting phong; camlight left; camlight right; material dull
+        hold on; drawnow;
         ft_plot_headshape(headshape_downsampled); drawnow;
-        view(0,0);print('mesh_quality','-dpdf');
+        view(0,0);print('mesh_quality','-dpng');
     end
 else
     figure;
     ft_plot_mesh(mesh,'facecolor',[238,206,179]./255,'EdgeColor','none','facealpha',0.8); hold on;
-    camlight; hold on; drawnow;
+    camlight; lighting phong; camlight left; camlight right; material dull
+    hold on; drawnow;
     view(90,0);
     ft_plot_headshape(headshape_downsampled); drawnow;
     title('If this looks weird you might want to adjust the cfg.scalpthreshold value');
-    print('mesh_quality','-dpdf');
+    print('mesh_quality','-dpng');
 end
 
 %% Perform ICP using mesh and headshape information
 numiter = 50;
-disp('Performing ICP fit with 50 iterations');
+disp('Performing ICP fit with 50 iterations\n');
 
 % Weight the facial points x10 times higher than the head points
 count_facialpoints2 = find(headshape_downsampled.pos(:,3)<3); x = 1;
@@ -178,16 +186,17 @@ count_facialpoints2 = find(headshape_downsampled.pos(:,3)<3); x = 1;
 if isempty(count_facialpoints2)
     w = ones(size(headshape_downsampled.pos,1),1).*1;
     weights = @(x)assignweights(x,w);
-    
-% But if there are facial points apply weighting using weight_number
+    disp('NOT Applying Weighting\n');
+    % But if there are facial points apply weighting using weight_number
 else
     w = ones(size(headshape_downsampled.pos,1),1).*weight_number;
     w(count_facialpoints2) = 1;
     weights = @(x)assignweights(x,w);
+    fprintf('Applying Weighting of %d \n',weight_number);
 end
 
 % Now try ICP with weights
-[R, t, err, dummy, info] = icp(mesh.pos', headshape_downsampled.pos', numiter, 'Minimize', 'plane', 'Extrapolation', true, 'Weight',weights, 'WorstRejection', 0.05);
+[R, t, err] = icp(mesh.pos', headshape_downsampled.pos', numiter, 'Minimize', 'plane', 'Extrapolation', true, 'Weight', weights, 'WorstRejection', 0.05);
 
 %% Create figure to display how the ICP algorithm reduces error
 clear plot;
@@ -209,24 +218,24 @@ if strcmp(do_vids,'yes')
     try
         figure;
         ft_plot_mesh(mesh_spare,'facecolor',[238,206,179]./255,'EdgeColor','none','facealpha',0.8); hold on;
-        camlight; hold on;
+        camlight; lighting phong; camlight left; camlight right; material dull; hold on;
         ft_plot_headshape(headshape_downsampled); title(sprintf('%s.   Error of ICP fit = %d' , c, err(end)));
         OptionZ.FrameRate=15;OptionZ.Duration=5.5;OptionZ.Periodic=true;
         CaptureFigVid([0,0; 360,0], 'ICP_quality',OptionZ)
     catch
         figure;
         ft_plot_mesh(mesh_spare,'facecolor',[238,206,179]./255,'EdgeColor','none','facealpha',0.8); hold on;
-        camlight; hold on;
+        camlight; lighting phong; camlight left; camlight right; material dull; hold on;
         ft_plot_headshape(headshape_downsampled); title(sprintf('%s.   Error of ICP fit = %d' , c, err(end)));
-        print('ICP_quality','-dpdf');
+        print('ICP_quality','-dpng');
         disp('You need CaptureFigVid in your MATLAB path. Download at https://goo.gl/Qr7GXb');
     end
 else
     figure;
     ft_plot_mesh(mesh_spare,'facecolor',[238,206,179]./255,'EdgeColor','none','facealpha',0.8); hold on;
-    camlight; hold on;
+    camlight; lighting phong; camlight left; camlight right; material dull; hold on;
     ft_plot_headshape(headshape_downsampled); title(sprintf('%s.   Error of ICP fit = %d' , c, err(end)));
-    clear c; print('ICP_quality','-dpdf');
+    clear c; print('ICP_quality','-dpng');
 end
 
 %% Apply transform to the MRI
@@ -259,7 +268,8 @@ headmodel_singleshell = ft_prepare_headmodel(cfg, mri_segmented); % in cm, creat
 figure;ft_plot_headshape(headshape_downsampled) %plot headshape
 ft_plot_sens(grad_trans, 'style', 'k*')
 ft_plot_vol(headmodel_singleshell,  'facecolor', 'cortex', 'edgecolor', 'cortex'); alpha(1.0); hold on;
-ft_plot_mesh(mesh_spare,'facecolor','skin'); alpha(0.2); camlight;
+ft_plot_mesh(mesh_spare,'facecolor','skin'); alpha(0.2);
+camlight left; camlight right; material dull; hold on;
 view([90,0]); title('After Coreg');
 print('headmodel_quality','-dpdf');
 save headmodel_singleshell headmodel_singleshell
@@ -354,18 +364,18 @@ save headmodel_singleshell headmodel_singleshell
         
         %convert to BESA style coordinates so can use the .pos file or sensor
         %config from .con
-        shape.pnt = cat(2,fliplr(shape.pnt(:,1:2)),shape.pnt(:,3)).*1000;
-        %shape.pnt = shape.pnt(1:length(shape.pnt)-15,:); % get rid of nose points may want to alter or comment this depending on your digitisation
-        %shape.pnt = shape.pnt*1000;
-        neg = shape.pnt(:,2)*-1;
-        shape.pnt(:,2) = neg;
-        
-        shape.fid.pnt = cat(2,fliplr(shape.fid.pnt(:,1:2)),shape.fid.pnt(:,3)).*1000;
-        %shape.fid.pnt = shape.fid.pnt*1000;
-        neg2 = shape.fid.pnt(:,2)*-1;
-        shape.fid.pnt(:,2) = neg2;
-        shape.unit='mm';
-        shape = ft_convert_units(shape,'cm');
+        %         shape.pnt = cat(2,fliplr(shape.pnt(:,1:2)),shape.pnt(:,3)).*1000;
+        %         %shape.pnt = shape.pnt(1:length(shape.pnt)-15,:); % get rid of nose points may want to alter or comment this depending on your digitisation
+        %         %shape.pnt = shape.pnt*1000;
+        %         neg = shape.pnt(:,2)*-1;
+        %         shape.pnt(:,2) = neg;
+        %
+        %         shape.fid.pnt = cat(2,fliplr(shape.fid.pnt(:,1:2)),shape.fid.pnt(:,3)).*1000;
+        %         %shape.fid.pnt = shape.fid.pnt*1000;
+        %         neg2 = shape.fid.pnt(:,2)*-1;
+        %         shape.fid.pnt(:,2) = neg2;
+        %         shape.unit='mm';
+        %         shape = ft_convert_units(shape,'cm');
         
         new_name2 = ['shape.mat'];
         save (new_name2,'shape');
@@ -555,14 +565,14 @@ save headmodel_singleshell headmodel_singleshell
         rmatx = [cos(deg) sin(deg) 0 0;-sin(deg) cos(deg) 0 0;0 0 1 0;0 0 0 1];
     end
 
-    function [headshape_downsampled] = downsample_headshape(path_to_headshape,numvertices,sensors)
+function [headshape_downsampled] = downsample_headshape(path_to_headshape,numvertices)
         % Get headshape
         headshape = ft_read_headshape(path_to_headshape);
         % Convert to cm
         headshape = ft_convert_units(headshape,'cm');
         % Convert to BESA co-ordinates
-        headshape.pos = cat(2,fliplr(headshape.pos(:,1:2)),headshape.pos(:,3));
-        headshape.pos(:,2) = headshape.pos(:,2).*-1;
+%         headshape.pos = cat(2,fliplr(headshape.pos(:,1:2)),headshape.pos(:,3));
+%         headshape.pos(:,2) = headshape.pos(:,2).*-1;
         
         % Get indices of facial points (up to 4cm above nasion)
         
@@ -614,11 +624,11 @@ save headmodel_singleshell headmodel_singleshell
         headshape.fid.label = {'NASION','LPA','RPA'};
         
         % Convert fiducial points to BESA
-        headshape.fid.pos = cat(2,fliplr(headshape.fid.pos(:,1:2)),headshape.fid.pos(:,3));
-        headshape.fid.pos(:,2) = headshape.fid.pos(:,2).*-1;
+%         headshape.fid.pos = cat(2,fliplr(headshape.fid.pos(:,1:2)),headshape.fid.pos(:,3));
+%         headshape.fid.pos(:,2) = headshape.fid.pos(:,2).*-1;
         
         % Plot for quality checking
-        figure;ft_plot_sens(sensors) %plot channel position : between the 1st and 2nd coils
+        figure;
         ft_plot_headshape(headshape) %plot headshape
         view(0,0);
         print('headshape_quality2','-dpdf');
@@ -628,12 +638,10 @@ save headmodel_singleshell headmodel_singleshell
         
     end
 
-    % Assign Weights Function
+% Assign Weights Function
     function y = assignweights(x, w)
         
         % x is an indexing vector with the same number of arguments as w
         y = w(:)';
     end
 end
-
-
